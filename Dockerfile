@@ -16,7 +16,7 @@ RUN apt-get update && \
 
 # Install Python dependencies
 COPY requirements.txt .
-RUN pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels -r requirements.txt
+RUN pip install -r requirements.txt
 
 # Final stage
 FROM python:3.9-slim
