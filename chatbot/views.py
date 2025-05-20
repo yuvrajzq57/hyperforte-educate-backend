@@ -58,7 +58,7 @@ class ChatBotAPIView(APIView):
         try:
             # Get authenticated user details
             user_id = request.user.id
-            user_name = request.user.username  # Changed from name to username
+            user_name = request.user.name  # Changed from name to username
             
             message = request.data.get('message')
             module_id = request.data.get('module_id')
