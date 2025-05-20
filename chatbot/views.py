@@ -1,208 +1,3 @@
-# import os
-# import json
-# from rest_framework.views import APIView
-# from rest_framework.response import Response
-# from rest_framework import status, permissions
-# from rest_framework.pagination import PageNumberPagination
-# from django.shortcuts import get_object_or_404
-# import requests
-# from .models import ChatMessage, ChatContext
-# from .serializers import ChatMessageSerializer, ChatContextSerializer
-
-# # Configure Groq API - in production, use environment variables
-# GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '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')
-# GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-
-# class ChatMessagePagination(PageNumberPagination):
-#     page_size = 20
-#     page_size_query_param = 'page_size'   
-#     max_page_size = 100
-
-# class ChatBotAPIView(APIView):
-#     permission_classes = [permissions.IsAuthenticated]
-    
-#     def get_cybersecurity_context(self, module_id):
-#         """Returns module-specific cybersecurity context based on module_id"""
-#         # This would ideally come from a database or configuration
-#         module_contexts = {
-#             1: {
-#                 "name": "Introduction to Cybersecurity",
-#                 "topics": ["security fundamentals", "CIA triad", "threat landscape"]
-#             },
-#             2: {
-#                 "name": "Network Security",
-#                 "topics": ["firewalls", "IDS/IPS", "VPNs", "network protocols"]
-#             },
-#             3: {
-#                 "name": "Web Application Security",
-#                 "topics": ["OWASP Top 10", "XSS", "CSRF", "SQL injection"]
-#             },
-#             4: {
-#                 "name": "Cryptography",
-#                 "topics": ["encryption", "hashing", "digital signatures", "PKI"]
-#             },
-#             5: {
-#                 "name": "Security Operations",
-#                 "topics": ["incident response", "SIEM", "threat hunting", "forensics"]
-#             }
-#         }
-        
-#         return module_contexts.get(module_id, {"name": f"Module {module_id}", "topics": ["cybersecurity"]})
-    
-#     def generate_ai_response(self, message, module_id, user_id):
-#         """Generate response using Groq API with proper context"""
-#         try:
-#             # Get module context
-#             module_context = self.get_cybersecurity_context(module_id)
-            
-#             # Get user context if it exists
-#             user_context, _ = ChatContext.objects.get_or_create(
-#                 user_id=user_id,
-#                 module_id=module_id,
-#                 defaults={'context': {}}
-#             )
-            
-#             # Get recent messages for context
-#             recent_messages = ChatMessage.objects.filter(
-#                 user_id=user_id, 
-#                 module_id=module_id
-#             ).order_by('-timestamp')[:5]
-            
-#             conversation_history = []
-#             for msg in reversed(list(recent_messages)):
-#                 conversation_history.append({"role": "user", "content": msg.message})
-#                 conversation_history.append({"role": "assistant", "content": msg.response})
-            
-#             # Create the prompt
-#             system_prompt = f"""
-#             You are an expert cybersecurity educator and mentor specializing in {module_context['name']}.
-#             Focus on topics like {', '.join(module_context['topics'])}.
-            
-#             Your responses should be:
-#             1. Educational and accurate to cybersecurity best practices
-#             2. Tailored to a learning environment
-#             3. Concise yet comprehensive
-#             4. Include practical examples when appropriate
-#             5. Encourage critical thinking about security concepts
-            
-#             Avoid giving answers that could enable malicious activities without proper ethical context.
-#             If asked about hacking techniques, frame your response in terms of defensive security.
-#             """
-            
-#             messages = [
-#                 {"role": "system", "content": system_prompt}
-#             ]
-            
-#             # Add conversation history for context
-#             if conversation_history:
-#                 messages.extend(conversation_history)
-                
-#             # Add current message
-#             messages.append({"role": "user", "content": message})
-            
-#             # FOR TESTING - use direct API call to Groq
-#             if GROQ_API_KEY != 'your-groq-api-key-here':
-#                 headers = {
-#                     "Authorization": f"Bearer {GROQ_API_KEY}",
-#                     "Content-Type": "application/json"
-#                 }
-                
-#                 payload = {
-#                     "model": "llama3-70b-8192",  # Using Llama 3 70B model - adjust as needed
-#                     "messages": messages,
-#                     "temperature": 0.7,
-#                     "max_tokens": 500
-#                 }
-                
-#                 response = requests.post(GROQ_API_URL, headers=headers, json=payload)
-                
-#                 if response.status_code == 200:
-#                     response_data = response.json()
-#                     return response_data['choices'][0]['message']['content']
-#                 else:
-#                     print(f"Error from Groq API: {response.status_code} - {response.text}")
-#                     return "I apologize, but I encountered an error communicating with the AI service. Please try again later."
-            
-#             # Fallback for testing or when API key is not set
-#             return f"This is a cybersecurity response about {module_context['name']}. Your question was about {message[:30]}..."
-            
-#         except Exception as e:
-#             # Log the error in a production environment
-#             print(f"Error generating AI response: {str(e)}")
-#             return f"I apologize, but I encountered an error processing your request. Please try again later."
-    
-#     def post(self, request, format=None):
-#         message = request.data.get('message')
-#         module_id = request.data.get('module_id')
-        
-#         # Validate required fields
-#         if not message or not module_id:
-#             return Response({"error": "message and module_id are required."}, status=status.HTTP_400_BAD_REQUEST)
-        
-#         try:
-#             # Convert module_id to integer
-#             module_id = int(module_id)
-#         except ValueError:
-#             return Response({"error": "module_id must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
-        
-#         # Generate AI response
-#         ai_response = self.generate_ai_response(message, module_id, request.user.id)
-        
-#         # Create chat message in database
-#         chat = ChatMessage.objects.create(
-#             user=request.user,
-#             module_id=module_id,
-#             message=message,
-#             response=ai_response
-#         )
-        
-#         # Update context with the latest interaction
-#         context, created = ChatContext.objects.get_or_create(
-#             user=request.user,
-#             module_id=module_id,
-#             defaults={'context': {}}
-#         )
-        
-#         # Add this interaction to context (simplified example)
-#         context_data = context.context
-#         if 'interactions' not in context_data:
-#             context_data['interactions'] = 0
-#         context_data['interactions'] += 1
-#         context_data['last_topic'] = message[:50]  # Simplified context tracking
-#         context.context = context_data
-#         context.save()
-        
-#         serializer = ChatMessageSerializer(chat)
-#         return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-# class ChatHistoryAPIView(APIView):
-#     permission_classes = [permissions.IsAuthenticated]
-#     pagination_class = ChatMessagePagination
-    
-#     def get(self, request, format=None):
-#         module_id = request.query_params.get('module_id')
-        
-#         # Filter messages
-#         messages = ChatMessage.objects.filter(user=request.user)
-#         if module_id:
-#             try:
-#                 module_id = int(module_id)
-#                 messages = messages.filter(module_id=module_id)
-#             except ValueError:
-#                 return Response({"error": "module_id must be an integer."}, 
-#                                status=status.HTTP_400_BAD_REQUEST)
-        
-#         # Order by timestamp
-#         messages = messages.order_by('-timestamp')
-        
-#         # Paginate results
-#         paginator = self.pagination_class()
-#         result_page = paginator.paginate_queryset(messages, request)
-#         serializer = ChatMessageSerializer(result_page, many=True)
-        
-#         return paginator.get_paginated_response(serializer.data)
-
-
 import os
 import json
 from rest_framework.views import APIView
@@ -214,7 +9,11 @@ from datetime import datetime
 from dotenv import load_dotenv
 import os
 from datetime import datetime
-
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import BasicAuthentication,SessionAuthentication, TokenAuthentication
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.authtoken.models import Token
 
 load_dotenv()  # Load environment variables from .env
 
@@ -229,6 +28,7 @@ CHAT_CONTEXTS = []
 
 
 now = datetime.now()
+
 
 class ChatMessagePagination:
     def __init__(self, page_size=20):
@@ -248,8 +48,59 @@ class ChatMessagePagination:
             'total_results': len(data)
         }
 
+
+@method_decorator(csrf_exempt, name='dispatch')
 class ChatBotAPIView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            # Get authenticated user details
+            user_id = request.user.id
+            user_name = request.user.username  # Changed from name to username
+            
+            message = request.data.get('message')
+            module_id = request.data.get('module_id')
+            
+            # Validate required fields
+            if not message or not module_id:
+                return Response(
+                    {"error": "message and module_id are required."}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                module_id = int(module_id)
+            except ValueError:
+                return Response(
+                    {"error": "module_id must be an integer."}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Generate AI response with user details
+            ai_response = self.generate_ai_response(message, module_id, user_id, user_name)
+            
+            # Create chat message
+            chat_message = {
+                'id': len(CHAT_MESSAGES) + 1,
+                'user_id': user_id,
+                'module_id': module_id,
+                'message': message,
+                'response': ai_response,
+                'timestamp': datetime.now().isoformat()
+            }
+            CHAT_MESSAGES.append(chat_message)
+            
+            return Response(chat_message, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response(
+                {"error": str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     def get_cybersecurity_context(self, module_id):
+
         """Returns module-specific cybersecurity context based on module_id"""
         module_contexts = {
             1: {
@@ -276,7 +127,7 @@ class ChatBotAPIView(APIView):
         
         return module_contexts.get(module_id, {"name": f"Module {module_id}", "topics": ["cybersecurity"]})
     
-    def generate_ai_response(self, message, module_id, user_id):
+    def generate_ai_response(self, message, module_id, user_id,user_name):
         """Generate response using Groq API with proper context"""
         try:
             # Get module context
@@ -306,8 +157,7 @@ class ChatBotAPIView(APIView):
             4. Include practical examples when appropriate
             5. Encourage critical thinking about security concepts
             
-
-            the student name is Yuvraj , he is current studying module 1 , and is from cybersecurity branch in msrit banagalore
+            the student name is {user_name} , adapt to his feelings first ask him what are his weak points and then give him the answer only for the first time you do this 
             Avoid giving answers that could enable malicious activities without proper ethical context.
             If asked about hacking techniques, frame your response in terms of defensive security.
             """
@@ -333,7 +183,7 @@ class ChatBotAPIView(APIView):
                 payload = {
                     "model": "llama3-70b-8192",  # Using Llama 3 70B model - adjust as needed
                     "messages": messages,
-                    "temperature": 0.7,
+                    "temperature": 0.1,
                     "max_tokens": 500
                 }
                 
@@ -354,40 +204,13 @@ class ChatBotAPIView(APIView):
             print(f"Error generating AI response: {str(e)}")
             return f"I apologize, but I encountered an error processing your request. Please try again later."
     
-    def post(self, request):
-        # Default user_id for testing
-        user_id = 1
-        
-        message = request.data.get('message')
-        module_id = request.data.get('module_id')
-        
-        # Validate required fields
-        if not message or not module_id:
-            return Response({"error": "message and module_id are required."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            # Convert module_id to integer
-            module_id = int(module_id)
-        except ValueError:
-            return Response({"error": "module_id must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Generate AI response
-        ai_response = self.generate_ai_response(message, module_id, user_id)
-        
-        # Create mock chat message
-        chat_message = {
-            'id': len(CHAT_MESSAGES) + 1,
-            'user_id': user_id,
-            'module_id': module_id,
-            'message': message,
-            'response': ai_response,
-            'timestamp': datetime.now().isoformat()
-        }
-        CHAT_MESSAGES.append(chat_message)
-        
-        return Response(chat_message, status=status.HTTP_201_CREATED)
+   
 
+@method_decorator(csrf_exempt, name='dispatch')
 class ChatHistoryAPIView(APIView):
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         # Default user_id for testing
         user_id = 1

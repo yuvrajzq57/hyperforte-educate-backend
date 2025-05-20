@@ -38,21 +38,26 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'corsheaders', 
-    'authn',           # Enable CORS
+    'corsheaders',         # Enable CORS
     'chatbot',
-    # 'rest_framework.authtoken',
+    'authent',
+    'profiledetails',
+    'rest_framework.authtoken',
 ]
+
+AUTH_USER_MODEL = 'authent.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
+
+  
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -92,17 +97,17 @@ DATABASES = {
     }
 }
 
-# REST_FRAMEWORK = {
-#     'DEFAULT_AUTHENTICATION_CLASSES': [
-#         'rest_framework.authentication.TokenAuthentication', # Add this for token auth globally
-#         # You might also have SessionAuthentication or BasicAuthentication, depending on your needs
-#         # 'rest_framework.authentication.SessionAuthentication',
-#         # 'rest_framework.authentication.BasicAuthentication',
-#     ],
-#     'DEFAULT_PERMISSION_CLASSES': [
-#         'rest_framework.permissions.IsAuthenticated', # Default to authenticated if not overridden
-#     ]
-# }
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication', # Add this for token auth globally
+        # You might also have SessionAuthentication or BasicAuthentication, depending on your needs
+        # 'rest_framework.authentication.SessionAuthentication',
+        # 'rest_framework.authentication.BasicAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 

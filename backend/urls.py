@@ -17,13 +17,12 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from chatbot.views import ChatBotAPIView, ChatHistoryAPIView
-from authn.views import SignupAPIView, LoginAPIView, LogoutAPIView
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/auth/signup/', SignupAPIView.as_view(), name='signup'),
-    path('api/auth/login/', LoginAPIView.as_view(), name='login'),
-    path('api/auth/logout/', LogoutAPIView.as_view(), name='logout'),
      path('api/chatbot/', ChatBotAPIView.as_view(), name='chatbot'),
     path('api/chatbot/history/', ChatHistoryAPIView.as_view(), name='chatbot-history'),
+    path('api/authent/', include('authent.urls')),
+    path('api/', include('profiledetails.urls')),
 ]
