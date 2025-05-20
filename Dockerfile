@@ -45,8 +45,8 @@ RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.t
 COPY . .
 
 # Collect static files and run migrations
-RUN python manage.py collectstatic --noinput && \
-    python manage.py makemigrations && \
+
+RUN python manage.py makemigrations && \
     python manage.py migrate --noinput
 
 # Create and switch to app user
