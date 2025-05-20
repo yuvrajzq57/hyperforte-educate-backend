@@ -1,6 +1,5 @@
 # Build stage
-FROM python:3.9-slim as builder
-
+FROM python:3.11-slim as builder
 # Set build environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -19,8 +18,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # Final stage
-FROM python:3.9-slim
-
+FROM python:3.11-slim
 # Set production environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
