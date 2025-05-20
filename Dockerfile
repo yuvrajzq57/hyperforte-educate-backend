@@ -1,25 +1,29 @@
-# Build stage
+# --- Build stage ---
 FROM python:3.11-slim as builder
-# Set build environment variables
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /build
 
-# Install build dependencies
+# Install build tools
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
     python3-dev \
     libpq-dev
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+# Upgrade pip and install wheel
+RUN pip install --upgrade pip setuptools wheel
 
-# Final stage
+# Copy and build wheels
+COPY requirements.txt .
+RUN mkdir wheels \
+ && pip wheel --wheel-dir=wheels -r requirements.txt
+
+# --- Final stage ---
 FROM python:3.11-slim
-# Set production environment variables
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_HOME=/app \
@@ -27,35 +31,29 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR $APP_HOME
 
-# Install runtime dependencies
+# Install only runtime dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends libpq5 && \
-    rm -rf /var/lib/apt/lists/* && \
-    # Create app user
-    useradd -m -s /bin/bash app && \
-    chown -R app:app $APP_HOME
+    rm -rf /var/lib/apt/lists/*
 
-# Copy wheels and install dependencies
+# Copy wheels and install
 COPY --from=builder /build/wheels /wheels
 COPY --from=builder /build/requirements.txt .
-RUN pip install --no-cache /wheels/*
+RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt
 
-# Copy project files
-COPY . $APP_HOME/
+# Copy app code
+COPY . .
 
-# Collect static files
-RUN python manage.py collectstatic --noinput
-RUN python manage.py makemigrations
-RUN python manage.py migrate --noinput
+# Collect static files and run migrations
+RUN python manage.py collectstatic --noinput && \
+    python manage.py makemigrations && \
+    python manage.py migrate --noinput
 
-# Change ownership
-RUN chown -R app:app $APP_HOME
-
-# Switch to non-root user
+# Create and switch to app user
+RUN useradd -m -s /bin/bash app && \
+    chown -R app:app $APP_HOME
 USER app
 
-# Expose port
 EXPOSE $PORT
 
-# Start gunicorn
 CMD gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT --workers 4 --threads 2
