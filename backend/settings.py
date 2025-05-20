@@ -66,7 +66,9 @@ CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
       "http://127.0.0.1:8000",
-       "http://localhost:8000" # Example for a Next.js dev server
+       "http://localhost:8000"
+        "https://hyperforte-educate-backend-1.onrender.com"
+         "https://hyperforte-educate-frontend.vercel.app" # Example for a Next.js dev server
     # "https://your-frontend-domain.com",
 ]
 TEMPLATES = [
