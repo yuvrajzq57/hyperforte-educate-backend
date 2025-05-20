@@ -25,7 +25,10 @@ SECRET_KEY = 'django-insecure-!e)s70+@_9j5q07%ul$z6vzagh2_kb2k_x==%tc7gk5&1j&jr1
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+     "https://hyperforte-educate-backend-1.onrender.com"
+         "https://hyperforte-educate-frontend.vercel.app" 
+]
 
 
 # Application definition
