@@ -27,7 +27,8 @@ DEBUG = True
 
 ALLOWED_HOSTS = [
      'hyperforte-educate-backend-2.onrender.com',
-         'hyperforte-educate-frontend.vercel.app'
+         'hyperforte-educate-frontend.vercel.app',
+         'hyperforte-educate-backend-1.onrender.com'
 ]
 
 
