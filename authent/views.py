@@ -30,18 +30,61 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
     
     def post(self, request):
+        # Log the incoming request data for debugging
+        print("Login attempt with data:", request.data)
+        
         serializer = LoginSerializer(data=request.data)
-        if serializer.is_valid():
+        if not serializer.is_valid():
+            print("Validation errors:", serializer.errors)
+            return Response(
+                {
+                    'status': 'error',
+                    'message': 'Validation error',
+                    'errors': serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
             user = serializer.validated_data['user']
+            print(f"User found: {user.email}")
+            
+            # Check if user is active
+            if not user.is_active:
+                print(f"User {user.email} is not active")
+                return Response(
+                    {'error': 'Account is not active'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            # Perform login
             login(request, user)
+            
+            # Get or create token
             token, created = Token.objects.get_or_create(user=user)
+            print(f"Token {'created' if created else 'retrieved'} for user {user.email}")
+            
             return Response({
-                'token': token.key,
-                'user_id': user.id,
-                'email': user.email,
-                'name': user.name
+                'status': 'success',
+                'message': 'Login successful',
+                'data': {
+                    'token': token.key,
+                    'user_id': user.id,
+                    'email': user.email,
+                    'name': user.name
+                }
             }, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            print(f"Unexpected error during login: {str(e)}")
+            return Response(
+                {
+                    'status': 'error',
+                    'message': 'An error occurred during authentication',
+                    'error': str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 @method_decorator(csrf_exempt, name='dispatch')
 class LogoutView(APIView):
