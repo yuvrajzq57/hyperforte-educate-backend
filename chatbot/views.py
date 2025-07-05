@@ -3,6 +3,8 @@ import json
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.utils import timezone
+from profiledetails.models import ProfileDetails
 from rest_framework.pagination import PageNumberPagination
 import requests
 from datetime import datetime
@@ -127,11 +129,28 @@ class ChatBotAPIView(APIView):
         
         return module_contexts.get(module_id, {"name": f"Module {module_id}", "topics": ["cybersecurity"]})
     
-    def generate_ai_response(self, message, module_id, user_id,user_name):
+    def generate_ai_response(self, message, module_id, user_id, user_name):
         """Generate response using Groq API with proper context"""
         try:
             # Get module context
             module_context = self.get_cybersecurity_context(module_id)
+            
+            # Get user's profile details
+            try:
+                profile = ProfileDetails.objects.get(user_id=user_id)
+                profile_data = {
+                    'about': profile.about,
+                    'background': profile.background,
+                    'student_type': profile.student_type,
+                    'learning_style': profile.preferred_learning_style,
+                    'learning_preference': profile.learning_preference,
+                    'strengths': profile.strengths,
+                    'weaknesses': profile.weaknesses,
+                    'skill_levels': profile.skill_levels,
+                    'learning_goals': profile.learning_goals
+                }
+            except ProfileDetails.DoesNotExist:
+                profile_data = {}
             
             # Get recent messages for context
             recent_messages = [
@@ -144,22 +163,59 @@ class ChatBotAPIView(APIView):
                 conversation_history.append({"role": "user", "content": msg['message']})
                 conversation_history.append({"role": "assistant", "content": msg['response']})
             
+            # Format profile data for the prompt
+            profile_info = ""
+            if profile_data:
+                profile_info = "\nStudent Profile Details:"
+                if profile_data.get('about'):
+                    profile_info += f"\n- About: {profile_data['about']}"
+                if profile_data.get('background'):
+                    profile_info += f"\n- Background: {profile_data['background']}"
+                if profile_data.get('student_type'):
+                    profile_info += f"\n- Student Type: {profile_data['student_type'].title()}"
+                if profile_data.get('learning_style'):
+                    profile_info += f"\n- Preferred Learning Style: {profile_data['learning_style'].title().replace('_', ' ')}"
+                if profile_data.get('learning_preference'):
+                    profile_info += f"\n- Learning Preferences: {profile_data['learning_preference']}"
+                if profile_data.get('strengths'):
+                    profile_info += f"\n- Strengths: {', '.join(profile_data['strengths'])}"
+                if profile_data.get('weaknesses'):
+                    profile_info += f"\n- Areas for Improvement: {', '.join(profile_data['weaknesses'])}"
+                if profile_data.get('learning_goals'):
+                    goals = ", ".join([goal.get('goal', '') for goal in profile_data['learning_goals'] if goal.get('goal')])
+                    if goals:
+                        profile_info += f"\n- Learning Goals: {goals}"
+            
+            # Current time in Indian Standard Time (IST)
+            now = timezone.now().astimezone(timezone.get_fixed_timezone(330))  # +5:30 hours
+            
             # Create the prompt
             system_prompt = f"""
             You are an expert cybersecurity educator and mentor specializing in {module_context['name']}.
             Focus on topics like {', '.join(module_context['topics'])}.
             
-            current ime is : {now} -> convert this time to Indian Standard time and just give timing if user asks for timing 
+            Current time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}
+            
+            Student Information:
+            - Name: {user_name}
+            {profile_info}
+            
             Your responses should be:
             1. Educational and accurate to cybersecurity best practices
-            2. Tailored to a learning environment
+            2. Tailored to the student's learning style and preferences
             3. Concise yet comprehensive
             4. Include practical examples when appropriate
             5. Encourage critical thinking about security concepts
             
-            the student name is {user_name} , adapt to his feelings first ask him what are his weak points and then give him the answer only for the first time you do this 
-            Avoid giving answers that could enable malicious activities without proper ethical context.
-            If asked about hacking techniques, frame your response in terms of defensive security.
+            For the first interaction, ask about the student's weak points to better tailor your responses.
+            Always maintain an encouraging and supportive tone.
+            
+            Important Guidelines:
+            - Avoid giving answers that could enable malicious activities without proper ethical context.
+            - If asked about hacking techniques, frame your response in terms of defensive security.
+            - Adapt your teaching style based on the student's learning preferences and background.
+            - Provide examples and analogies that match the student's experience level.
+            - If the student has specific learning goals, help them work towards those goals.
             """
             
             messages = [
