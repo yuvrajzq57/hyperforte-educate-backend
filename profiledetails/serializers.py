@@ -11,6 +11,7 @@ class ProfileDetailsSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'email', 'about', 'background', 
             'student_type', 'preferred_learning_style', 'learning_preference',
+            'strengths', 'weaknesses', 'skill_levels', 'learning_goals',
             'created_at', 'updated_at', 'join_date'
         ]
         read_only_fields = ['created_at', 'updated_at', 'join_date']

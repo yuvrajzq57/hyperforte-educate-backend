@@ -48,7 +48,10 @@ INSTALLED_APPS = [
     'chatbot',
     'authent',
     'profiledetails',
+    'progress',
     'rest_framework.authtoken',
+    'courses',
+    'studyplan',
 ]
 
 AUTH_USER_MODEL = 'authent.User'
