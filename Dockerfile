@@ -44,11 +44,6 @@ RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.t
 # Copy app code
 COPY . .
 
-# Collect static files and run migrations
-
-RUN python manage.py makemigrations && \
-    python manage.py migrate --noinput
-
 # Create and switch to app user
 RUN useradd -m -s /bin/bash app && \
     chown -R app:app $APP_HOME
