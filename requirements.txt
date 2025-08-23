@@ -153,3 +153,9 @@ websockets==15.0.1
 Werkzeug==1.0.1
 xlsxwriter==3.2.5
 yarl==1.18.3
+tzdata==2025.2
+requests==2.32.3
+gunicorn==21.2.0
+psycopg2-binary==2.9.9
+whitenoise==6.6.0
+django-filter==22.1
