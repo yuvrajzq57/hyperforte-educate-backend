@@ -36,7 +36,7 @@ class ModuleSerializer(serializers.ModelSerializer):
         model = Module
         fields = [
             'id', 'course', 'title', 'description', 'order_number', 
-            'image_url', 'created_at', 'updated_at', 'sections', 'quiz'
+            'image', 'created_at', 'updated_at', 'sections', 'quiz'
         ]
 
 class CourseSerializer(serializers.ModelSerializer):

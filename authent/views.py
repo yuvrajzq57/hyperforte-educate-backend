@@ -3,10 +3,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import login, logout
-from .serializers import SignupSerializer, LoginSerializer
+from .serializers import SignupSerializer, LoginSerializer, UserSerializer
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from rest_framework import generics
 
 @method_decorator(csrf_exempt, name='dispatch')
 class SignupView(APIView):
@@ -91,10 +92,17 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
-        # Delete the user's token to logout
         try:
+            # Delete the token
             request.user.auth_token.delete()
-        except Exception:
-            pass
-        logout(request)
-        return Response({"success": "Successfully logged out."}, status=status.HTTP_200_OK)
+            logout(request)
+            return Response({'status': 'success', 'message': 'Successfully logged out.'}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class UserView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserSerializer
+
+    def get_object(self):
+        return self.request.user

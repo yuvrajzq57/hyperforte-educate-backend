@@ -74,8 +74,8 @@ class UserSectionProgress(models.Model):
         module_progress.update_progress()
 
 class UserQuizAttempt(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='quiz_attempts')
-    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='attempts')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='progress_quiz_attempts')
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='progress_attempts')
     score = models.FloatField(null=True, blank=True, help_text="Score in percentage")
     passed = models.BooleanField(default=False)
     started_at = models.DateTimeField(auto_now_add=True)

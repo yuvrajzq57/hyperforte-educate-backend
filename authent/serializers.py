@@ -3,6 +3,12 @@ from django.contrib.auth import get_user_model, authenticate
 
 User = get_user_model()
 
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'email', 'username', 'name', 'is_active', 'date_joined')
+        read_only_fields = ('id', 'is_active', 'date_joined')
+
 class SignupSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     
