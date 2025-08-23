@@ -16,6 +16,10 @@ RUN apt-get update && \
 # Upgrade pip and install wheel
 RUN pip install --upgrade pip setuptools wheel
 
+RUN apt-get update && apt-get install -y \
+    portaudio19-dev \
+    python3-pyaudio
+
 # Copy and build wheels
 COPY requirements.txt .
 RUN mkdir wheels \
