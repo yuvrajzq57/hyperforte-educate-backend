@@ -23,85 +23,77 @@ logger = logging.getLogger(__name__)
 
 class MarkAttendanceView(APIView):
     """
-    API endpoint for marking student attendance via QR code.
+    API endpoint for marking attendance from Educate App.
+    Records attendance locally and forwards to SPOC portal.
     """
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
     throttle_classes = [AttendanceRateThrottle]
 
     def post(self, request, *args, **kwargs):
-        # Validate input
-        serializer = MarkAttendanceInSerializer(data=request.data)
+        # Validate input with request context for metadata
+        serializer = MarkAttendanceSerializer(
+            data=request.data,
+            context={'request': request}
+        )
         serializer.is_valid(raise_exception=True)
         
-        session_id = serializer.validated_data['session_id']
-        token = serializer.validated_data['token']
+        session_id = str(serializer.validated_data['session_id'])
+        student_external_id = serializer.validated_data['student_external_id']
+        method = serializer.validated_data['method']
+        user_agent = serializer.validated_data.get('user_agent', '')
+        ip_address = serializer.validated_data.get('ip_address')
         
-        # Check if already marked
+        # Check for existing attendance record
         if AttendanceRecord.objects.filter(
             external_session_id=session_id,
-            student=request.user
+            student_external_id=student_external_id
         ).exists():
             return Response(
                 {
-                    'status': 'already_marked',
-                    'session_id': str(session_id),
+                    'status': 'success',
+                    'message': 'Attendance already recorded',
+                    'session_id': session_id,
+                    'timestamp': timezone.now().isoformat()
                 },
                 status=status.HTTP_200_OK
             )
         
         try:
-            # Verify with SPOC service
-            verification = verify_token(session_id, token)
-            
-            if not verification.get('valid'):
-                return Response(
-                    {'error': verification.get('reason', 'Invalid session')},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-                
-            if verification.get('status') != 'OPEN':
-                return Response(
-                    {'error': 'This attendance session is not open for marking'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Create attendance record
-            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-            ip_address = x_forwarded_for.split(',')[0] if x_forwarded_for else request.META.get('REMOTE_ADDR')
-            
+            # Create local attendance record
             attendance = AttendanceRecord.objects.create(
                 external_session_id=session_id,
-                student=request.user,
-                method='QR',
-                user_agent=request.META.get('HTTP_USER_AGENT', '')[:1000],
+                student_external_id=student_external_id,
+                method=method,
+                source='EDUCATE',
+                user_agent=user_agent,
                 ip_address=ip_address
             )
             
-            # Fire and forget webhook to SPOC if enabled
-            if getattr(settings, 'SPOC_MARK_ENABLED', True):
-                # Use user's ID as external ID by default
-                student_external_id = str(request.user.id)
-                push_mark(session_id, student_external_id)
+            # Forward to SPOC portal (async)
+            try:
+                push_mark.delay(session_id, student_external_id)  # Assuming Celery task
+            except Exception as e:
+                logger.error(f'Failed to queue SPOC update: {str(e)}')
             
             return Response(
                 {
-                    'status': 'ok',
-                    'session_id': str(session_id),
+                    'status': 'success',
+                    'message': 'Attendance recorded',
+                    'session_id': session_id,
+                    'timestamp': attendance.timestamp.isoformat()
                 },
-                status=status.HTTP_200_OK
+                status=status.HTTP_201_CREATED
             )
             
-        except SPOCClientError as e:
-            logger.error(f'SPOC client error: {str(e)}')
-            return Response(
-                {'error': 'Failed to verify attendance with the service'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
-            )
         except Exception as e:
-            logger.exception('Unexpected error marking attendance')
+            logger.exception(f'Error recording attendance: {str(e)}')
             return Response(
-                {'error': 'An unexpected error occurred'},
+                {
+                    'status': 'error',
+                    'message': 'Failed to record attendance',
+                    'error': str(e)
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

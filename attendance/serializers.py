@@ -6,10 +6,21 @@ from django.core.exceptions import ValidationError
 
 class MarkAttendanceSerializer(serializers.Serializer):
     """
-    Serializer for marking attendance after QR code validation.
+    Serializer for marking attendance from Educate App.
+    Validates and processes attendance marking requests.
     """
     session_id = serializers.UUIDField(required=True)
-    token = serializers.CharField(required=True, max_length=2000)
+    student_external_id = serializers.CharField(required=True, max_length=255)
+    method = serializers.ChoiceField(
+        required=True,
+        choices=[
+            ('QR', 'QR Code'),
+            ('MANUAL', 'Manual Entry'),
+            ('AUTO', 'Automatic')
+        ]
+    )
+    user_agent = serializers.CharField(required=False, allow_blank=True, default='')
+    ip_address = serializers.IPAddressField(required=False, allow_null=True, default=None)
     
     def validate_session_id(self, value):
         """Validate session_id format."""
@@ -19,11 +30,16 @@ class MarkAttendanceSerializer(serializers.Serializer):
             except ValueError:
                 raise ValidationError("Invalid session_id format. Must be a valid UUID.")
         return value
-    
-    def validate(self, data):
-        """Additional validation for the attendance data."""
-        # You can add cross-field validation here if needed
-        return data
+        
+    def validate(self, attrs):
+        """Add request metadata if not provided."""
+        request = self.context.get('request')
+        if request and not attrs.get('user_agent'):
+            attrs['user_agent'] = request.META.get('HTTP_USER_AGENT', '')[:1000]
+        if request and not attrs.get('ip_address'):
+            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+            attrs['ip_address'] = x_forwarded_for.split(',')[0] if x_forwarded_for else request.META.get('REMOTE_ADDR')
+        return attrs
 
 
 class MarkAttendanceOutSerializer(serializers.Serializer):
