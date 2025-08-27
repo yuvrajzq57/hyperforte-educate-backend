@@ -46,13 +46,14 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',         # Enable CORS
+    'rest_framework.authtoken',
     'chatbot',
     'authent',
     'profiledetails',
     'progress',
-    'rest_framework.authtoken',
     'courses',
     'studyplan',
+    'attendance',
 ]
 
 AUTH_USER_MODEL = 'authent.User'
@@ -151,17 +152,21 @@ DATABASES = {
     }
 }
 
+# JWT Settings
+JWT_SECRET_KEY = 'your-very-secure-secret-key'  
+JWT_ALGORITHM = 'HS256'
+QR_CODE_EXPIRY_MINUTES = 5  
+
+# SPOC Dashboard Settings
+EDUCATE_PORTAL_URL = 'https://educate-portal.example.com'  
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
-        'rest_framework.authentication.SessionAuthentication',  # Needed for the browsable API
+        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
-    ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
-    'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     ],
