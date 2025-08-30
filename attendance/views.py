@@ -29,76 +29,91 @@ class MarkAttendanceView(APIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
     throttle_classes = [AttendanceRateThrottle]
-
+    
     def post(self, request, *args, **kwargs):
-        # Validate input with request context for metadata
-        serializer = MarkAttendanceSerializer(
-            data=request.data,
-            context={'request': request}
-        )
-        serializer.is_valid(raise_exception=True)
+        # Get student_external_id from request data or user profile
+        data = request.data.copy()
         
-        session_id = str(serializer.validated_data['session_id'])
-        student_external_id = serializer.validated_data['student_external_id']
-        method = serializer.validated_data['method']
-        user_agent = serializer.validated_data.get('user_agent', '')
-        ip_address = serializer.validated_data.get('ip_address')
+        # If student_external_id is not in request data, try to get it from user profile
+        if 'student_external_id' not in data or not data['student_external_id']:
+            if not request.user.student_external_id:
+                return Response(
+                    {"error": "Student external ID is required and not found in user profile"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            data['student_external_id'] = request.user.student_external_id
         
-        # Check for existing attendance record
-        if AttendanceRecord.objects.filter(
-            external_session_id=session_id,
-            student_external_id=student_external_id
-        ).exists():
-            return Response(
-                {
-                    'status': 'success',
-                    'message': 'Attendance already recorded',
-                    'session_id': session_id,
-                    'timestamp': timezone.now().isoformat()
-                },
-                status=status.HTTP_200_OK
-            )
+        # Add user to context for logging and validation
+        context = {'request': request, 'user': request.user}
         
         try:
-            # Create local attendance record
-            attendance = AttendanceRecord.objects.create(
-                external_session_id=session_id,
-                student_external_id=student_external_id,
-                method=method,
-                source='EDUCATE',
-                user_agent=user_agent,
-                ip_address=ip_address
+            serializer = MarkAttendanceSerializer(data=data, context=context)
+            if not serializer.is_valid():
+                logger.warning(f"Attendance validation failed: {serializer.errors}")
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Invalid data provided",
+                        "errors": serializer.errors
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            # Check for existing attendance record
+            existing_record = AttendanceRecord.objects.filter(
+                external_session_id=serializer.validated_data['session_id'],
+                student_external_id=data['student_external_id']
+            ).first()
+            
+            if existing_record:
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Attendance already recorded",
+                        "attendance_id": str(existing_record.id),
+                        "marked_at": existing_record.marked_at.isoformat(),
+                        "synced_with_spoc": existing_record.synced_with_spoc
+                    },
+                    status=status.HTTP_200_OK
+                )
+            
+            # Create new attendance record
+            attendance = serializer.save()
+            
+            # Log successful attendance creation
+            logger.info(
+                f"Attendance recorded - Session: {attendance.external_session_id}, "
+                f"Student: {attendance.student_external_id}, "
+                f"User: {request.user.email}"
             )
             
-            # Forward to SPOC portal (async)
-            try:
-                push_mark.delay(session_id, student_external_id)  # Assuming Celery task
-            except Exception as e:
-                logger.error(f'Failed to queue SPOC update: {str(e)}')
+            # Forward to SPOC server asynchronously
+            push_mark_to_spoc.delay(
+                session_id=str(attendance.external_session_id),
+                student_external_id=attendance.student_external_id,
+                token=attendance.token,
+                method=attendance.method
+            )
             
             return Response(
                 {
-                    'status': 'success',
-                    'message': 'Attendance recorded',
-                    'session_id': session_id,
-                    'timestamp': attendance.timestamp.isoformat()
-                },
+                    "status": "success",
+                    "message": "Attendance recorded successfully",
+                    "data": MarkAttendanceSerializer(attendance).data
+                }, 
                 status=status.HTTP_201_CREATED
             )
             
         except Exception as e:
-            logger.exception(f'Error recording attendance: {str(e)}')
+            logger.error(f"Error creating attendance record: {str(e)}", exc_info=True)
             return Response(
                 {
-                    'status': 'error',
-                    'message': 'Failed to record attendance',
-                    'error': str(e)
-                },
+                    "status": "error",
+                    "message": "Failed to create attendance record",
+                    "error": str(e)
+                }, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-
-
 
 
 class QRCodeScanView(APIView):

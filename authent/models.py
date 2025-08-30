@@ -22,6 +22,15 @@ class User(AbstractUser):
         help_text="URL to the user's profile picture"
     )
     
+    # SPOC Integration
+    student_external_id = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        unique=True,
+        help_text="External ID used for SPOC portal integration"
+    )
+    
     # Groups and permissions with custom related names
     groups = models.ManyToManyField(
         'auth.Group',

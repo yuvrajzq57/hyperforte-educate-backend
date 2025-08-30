@@ -11,16 +11,39 @@ class MarkAttendanceSerializer(serializers.Serializer):
     """
     session_id = serializers.UUIDField(required=True)
     student_external_id = serializers.CharField(required=True, max_length=255)
+    token = serializers.CharField(required=True, max_length=500)
+    status = serializers.ChoiceField(
+        required=False,
+        default='present',
+        choices=[
+            ('present', 'Present'),
+            ('absent', 'Absent'),
+            ('late', 'Late'),
+            ('excused', 'Excused')
+        ]
+    )
     method = serializers.ChoiceField(
         required=True,
         choices=[
             ('QR', 'QR Code'),
             ('MANUAL', 'Manual Entry'),
             ('AUTO', 'Automatic')
-        ]
+        ],
+        default='QR'
+    )
+    source = serializers.CharField(
+        required=False,
+        default='EDUCATE',
+        max_length=50
     )
     user_agent = serializers.CharField(required=False, allow_blank=True, default='')
     ip_address = serializers.IPAddressField(required=False, allow_null=True, default=None)
+    
+    class Meta:
+        fields = [
+            'session_id', 'student_external_id', 'token', 'status',
+            'method', 'source', 'user_agent', 'ip_address'
+        ]
     
     def validate_session_id(self, value):
         """Validate session_id format."""
@@ -32,13 +55,22 @@ class MarkAttendanceSerializer(serializers.Serializer):
         return value
         
     def validate(self, attrs):
-        """Add request metadata if not provided."""
+        """Add request metadata if not provided and validate required fields."""
         request = self.context.get('request')
+        
+        # Add request metadata if not provided
         if request and not attrs.get('user_agent'):
             attrs['user_agent'] = request.META.get('HTTP_USER_AGENT', '')[:1000]
         if request and not attrs.get('ip_address'):
             x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
             attrs['ip_address'] = x_forwarded_for.split(',')[0] if x_forwarded_for else request.META.get('REMOTE_ADDR')
+        
+        # Ensure student_external_id is provided for new records
+        if self.instance is None and not attrs.get('student_external_id'):
+            raise serializers.ValidationError({
+                'student_external_id': 'This field is required for attendance marking.'
+            })
+            
         return attrs
 
 

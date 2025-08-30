@@ -77,16 +77,31 @@ ROOT_URLCONF = 'backend.urls'
 # CORS_ALLOW_ALL_ORIGINS = True
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True  # For development only - restrict in production
-# CORS_ALLOWED_ORIGINS = [
-#     'http://localhost:3000',
-#     'http://127.0.0.1:3000',
-#     'https://hyperforte-educate-frontend.vercel.app',
-#     'https://hyperforte-educate-backend-2.onrender.com',
-#     'https://hyperforte-educate-backend-1.onrender.com',
-#     'https://hyperforte-educate-backend.onrender.com',
-# ]
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOWED_ORIGINS = [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'http://localhost:8000',
+        'http://127.0.0.1:8000',
+        'https://hyperforte-educate-frontend.vercel.app',
+        'https://hyperforte-educate-backend-2.onrender.com',
+        'https://hyperforte-educate-backend-1.onrender.com',
+        'https://hyperforte-educate-backend.onrender.com',
+    ]
+
 CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'https://hyperforte-educate-frontend.vercel.app',
+    'https://hyperforte-educate-backend-2.onrender.com',
+    'https://hyperforte-educate-backend-1.onrender.com',
+    'https://hyperforte-educate-backend.onrender.com',
+]
 
 # Allow all headers and methods
 CORS_ALLOW_HEADERS = [
