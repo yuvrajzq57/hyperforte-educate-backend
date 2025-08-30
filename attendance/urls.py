@@ -12,22 +12,13 @@ app_name = 'attendance'
 router = DefaultRouter()
 
 # API v1 URL patterns
-api_v1 = [
+urlpatterns = [
     # QR Code scanning endpoint (for students)
-    path('scan/', QRCodeScanView.as_view(), name='qr-scan'),
+    path('api/v1/attendance/scan/', QRCodeScanView.as_view(), name='qr-scan'),
     
     # Mark attendance after validation (for Educate Portal)
-    path('mark-attendance/', MarkAttendanceView.as_view(), name='mark-attendance'),
+    path('api/v1/attendance/mark-attendance/', MarkAttendanceView.as_view(), name='mark-attendance'),
     
     # Health check endpoint
-    path('health/', HealthCheckView.as_view(), name='health-check'),
+    path('api/v1/attendance/health/', HealthCheckView.as_view(), name='health-check'),
 ]
-
-# Root URL patterns
-urlpatterns = [
-    # API v1
-    path('api/v1/attendance/', include((api_v1, 'attendance'))),
-]
-
-# Include the router URLs
-urlpatterns += router.urls
