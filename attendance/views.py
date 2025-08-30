@@ -42,9 +42,19 @@ class MarkAttendanceView(APIView):
         
         # If student_external_id is not in request data, try to get it from user profile
         if 'student_external_id' not in data or not data['student_external_id']:
-            if not request.user.student_external_id:
+            if not hasattr(request.user, 'student_external_id') or not request.user.student_external_id:
                 return Response(
-                    {"error": "Student external ID is required and not found in user profile"},
+                    {
+                        "status": "error",
+                        "message": "Student external ID not found",
+                        "details": {
+                            "user_authenticated": request.user.is_authenticated,
+                            "user_id": str(request.user.id) if request.user.is_authenticated else None,
+                            "has_student_external_id": hasattr(request.user, 'student_external_id'),
+                            "student_external_id_value": getattr(request.user, 'student_external_id', None)
+                        },
+                        "solution": "Please ensure the user has a valid student profile with an external ID."
+                    },
                     status=status.HTTP_400_BAD_REQUEST
                 )
             data['student_external_id'] = request.user.student_external_id
