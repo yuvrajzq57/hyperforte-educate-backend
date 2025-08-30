@@ -8,9 +8,44 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.authentication import TokenAuthentication
+from rest_framework.authentication import TokenAuthentication, BaseAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
+
+class DebugJWTAuthentication(JWTAuthentication):
+    def authenticate(self, request):
+        logger.debug("Attempting JWT Authentication")
+        try:
+            auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+            logger.debug(f"JWT Auth Header: {auth_header}")
+            
+            if not auth_header.startswith('Bearer '):
+                logger.debug("No Bearer token in header")
+                return None
+                
+            user_jwt = super().authenticate(request)
+            if user_jwt is not None:
+                logger.debug(f"JWT Authentication successful for user: {user_jwt[0].username}")
+            else:
+                logger.debug("JWT Authentication failed - no user returned")
+            return user_jwt
+        except Exception as e:
+            logger.error(f"JWT Authentication error: {str(e)}", exc_info=True)
+            return None
+
+class DebugTokenAuthentication(TokenAuthentication):
+    def authenticate(self, request):
+        logger.debug("Attempting Token Authentication")
+        try:
+            result = super().authenticate(request)
+            if result is not None:
+                logger.debug(f"Token Authentication successful for user: {result[0].username}")
+            else:
+                logger.debug("Token Authentication failed - no user returned")
+            return result
+        except Exception as e:
+            logger.error(f"Token Authentication error: {str(e)}", exc_info=True)
+            return None
 from .serializers import (
     MarkAttendanceSerializer,
     QRCodeScanSerializer,
@@ -27,16 +62,26 @@ class MarkAttendanceView(APIView):
     API endpoint for marking attendance from Educate App.
     Records attendance locally and forwards to SPOC portal.
     """
-    authentication_classes = [JWTAuthentication, TokenAuthentication]  # Support both JWT and Token auth
+    authentication_classes = [DebugJWTAuthentication, DebugTokenAuthentication]  # Debug versions of auth classes
     permission_classes = [IsAuthenticated]
     throttle_classes = [AttendanceRateThrottle]
     
     def post(self, request, *args, **kwargs):
         # Add debug logging for the incoming request
         logger.debug(
-            f"MarkAttendanceView - Request received. User: {request.user.id if request.user.is_authenticated else 'Not authenticated'}, "
+            f"MarkAttendanceView - Request received. "
+            f"User: {request.user.id if request.user.is_authenticated else 'Not authenticated'}, "
+            f"Auth headers: {request.META.get('HTTP_AUTHORIZATION', 'No auth header')}, "
             f"Data: {request.data}"
         )
+        
+        # Log authentication classes being used
+        logger.debug(f"Authentication classes: {[auth.__name__ for auth in self.authentication_classes]}")
+        
+        # If not authenticated, log why
+        if not request.user.is_authenticated:
+            logger.warning("User not authenticated. Available auth headers: %s", 
+                         {k: v for k, v in request.META.items() if k.startswith('HTTP_')})
         
         # Get student_external_id from request data or user profile
         data = request.data.copy()
@@ -167,7 +212,7 @@ class QRCodeScanView(APIView):
     Handle QR code scanning from Educate Portal
     Validates the QR code and returns session information
     """
-    authentication_classes = [JWTAuthentication, TokenAuthentication]  # Support both JWT and Token auth
+    authentication_classes = [DebugJWTAuthentication, DebugTokenAuthentication]  # Debug versions of auth classes
     permission_classes = [IsAuthenticated]
     throttle_classes = [AttendanceRateThrottle]
 
