@@ -31,6 +31,12 @@ class MarkAttendanceView(APIView):
     throttle_classes = [AttendanceRateThrottle]
     
     def post(self, request, *args, **kwargs):
+        # Add debug logging for the incoming request
+        logger.debug(
+            f"MarkAttendanceView - Request received. User: {request.user.id if request.user.is_authenticated else 'Not authenticated'}, "
+            f"Data: {request.data}"
+        )
+        
         # Get student_external_id from request data or user profile
         data = request.data.copy()
         
@@ -43,24 +49,46 @@ class MarkAttendanceView(APIView):
         # If student_external_id is not in request data, try to get it from user profile
         if 'student_external_id' not in data or not data['student_external_id']:
             if not hasattr(request.user, 'student_external_id') or not request.user.student_external_id:
-                return Response(
-                    {
-                        "status": "error",
-                        "message": "Student external ID not found",
-                        "details": {
-                            "user_authenticated": request.user.is_authenticated,
-                            "user_id": str(request.user.id) if request.user.is_authenticated else None,
-                            "has_student_external_id": hasattr(request.user, 'student_external_id'),
-                            "student_external_id_value": getattr(request.user, 'student_external_id', None)
-                        },
-                        "solution": "Please ensure the user has a valid student profile with an external ID."
+                error_details = {
+                    "status": "error",
+                    "message": "Student external ID not found in user profile",
+                    "details": {
+                        "user_authenticated": request.user.is_authenticated,
+                        "user_id": str(request.user.id) if request.user.is_authenticated else None,
+                        "email": request.user.email if request.user.is_authenticated else None,
+                        "has_student_external_id": hasattr(request.user, 'student_external_id'),
+                        "student_external_id": getattr(request.user, 'student_external_id', None)
                     },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                    "solution": [
+                        "1. Ensure the user is logged in with a valid student account",
+                        "2. Check that the user's profile has a student_external_id set",
+                        "3. If this is a test account, make sure it's properly configured with a student_external_id"
+                    ]
+                }
+                logger.error(f"Student external ID not found: {error_details}")
+                return Response(error_details, status=status.HTTP_400_BAD_REQUEST)
+            
+            logger.debug(f"Using student_external_id from user profile: {request.user.student_external_id}")
             data['student_external_id'] = request.user.student_external_id
+        else:
+            logger.debug(f"Using student_external_id from request: {data['student_external_id']}")
+            
+        logger.debug(f"Proceeding with student_external_id: {data['student_external_id']}")
         
         # Add user to context for logging and validation
         context = {'request': request, 'user': request.user}
+        
+        # Add debug information to response
+        debug_info = {
+            'user': {
+                'id': str(request.user.id) if request.user.is_authenticated else None,
+                'email': request.user.email if request.user.is_authenticated else None,
+                'username': request.user.username if request.user.is_authenticated else None,
+                'has_student_external_id': hasattr(request.user, 'student_external_id'),
+                'student_external_id': getattr(request.user, 'student_external_id', None)
+            },
+            'request_data': data
+        }
         
         try:
             serializer = MarkAttendanceSerializer(data=data, context=context)
@@ -70,7 +98,8 @@ class MarkAttendanceView(APIView):
                     {
                         "status": "error",
                         "message": "Invalid data provided",
-                        "errors": serializer.errors
+                        "errors": serializer.errors,
+                        "debug": debug_info  # Include debug info in the response
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )
