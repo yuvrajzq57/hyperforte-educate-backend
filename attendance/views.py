@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from .serializers import (
     MarkAttendanceSerializer,
@@ -26,7 +27,7 @@ class MarkAttendanceView(APIView):
     API endpoint for marking attendance from Educate App.
     Records attendance locally and forwards to SPOC portal.
     """
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [JWTAuthentication, TokenAuthentication]  # Support both JWT and Token auth
     permission_classes = [IsAuthenticated]
     throttle_classes = [AttendanceRateThrottle]
     
@@ -166,7 +167,7 @@ class QRCodeScanView(APIView):
     Handle QR code scanning from Educate Portal
     Validates the QR code and returns session information
     """
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [JWTAuthentication, TokenAuthentication]  # Support both JWT and Token auth
     permission_classes = [IsAuthenticated]
     throttle_classes = [AttendanceRateThrottle]
 
