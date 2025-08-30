@@ -23,13 +23,13 @@ class MarkAttendanceSerializer(serializers.Serializer):
         ]
     )
     method = serializers.ChoiceField(
-        required=True,
+        required=False,  # Changed from required=True to required=False since we have a default
         choices=[
             ('QR', 'QR Code'),
             ('MANUAL', 'Manual Entry'),
             ('AUTO', 'Automatic')
         ],
-        default='QR'
+        default='QR'  # Default value will be used if not provided
     )
     source = serializers.CharField(
         required=False,
