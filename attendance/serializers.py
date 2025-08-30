@@ -10,7 +10,7 @@ class MarkAttendanceSerializer(serializers.Serializer):
     Validates and processes attendance marking requests.
     """
     session_id = serializers.UUIDField(required=True)
-    student_external_id = serializers.CharField(required=True, max_length=255)
+    student_external_id = serializers.CharField(required=False, max_length=255, allow_blank=True, allow_null=True)
     token = serializers.CharField(required=True, max_length=500)
     status = serializers.ChoiceField(
         required=False,
@@ -65,12 +65,6 @@ class MarkAttendanceSerializer(serializers.Serializer):
             x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
             attrs['ip_address'] = x_forwarded_for.split(',')[0] if x_forwarded_for else request.META.get('REMOTE_ADDR')
         
-        # Ensure student_external_id is provided for new records
-        if self.instance is None and not attrs.get('student_external_id'):
-            raise serializers.ValidationError({
-                'student_external_id': 'This field is required for attendance marking.'
-            })
-            
         return attrs
 
 

@@ -34,6 +34,12 @@ class MarkAttendanceView(APIView):
         # Get student_external_id from request data or user profile
         data = request.data.copy()
         
+        # Extract token from Authorization header if not in request data
+        if 'token' not in data and 'HTTP_AUTHORIZATION' in request.META:
+            auth_header = request.META['HTTP_AUTHORIZATION'].split()
+            if len(auth_header) == 2 and auth_header[0].lower() == 'bearer':
+                data['token'] = auth_header[1]
+        
         # If student_external_id is not in request data, try to get it from user profile
         if 'student_external_id' not in data or not data['student_external_id']:
             if not request.user.student_external_id:
