@@ -14,23 +14,38 @@ from rest_framework.exceptions import AuthenticationFailed, ValidationError
 
 class DebugJWTAuthentication(JWTAuthentication):
     def authenticate(self, request):
-        logger.debug("Attempting JWT Authentication")
+        logger.debug("=== Starting JWT Authentication ===")
         try:
-            auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-            logger.debug(f"JWT Auth Header: {auth_header}")
+            # Log all headers for debugging
+            logger.debug("All headers: %s", {k: v for k, v in request.META.items() if k.startswith('HTTP_')})
             
+            # Get the authorization header
+            auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+            logger.debug(f"Raw Auth Header: {auth_header}")
+            
+            # Check if the header is in the correct format
             if not auth_header.startswith('Bearer '):
-                logger.debug("No Bearer token in header")
+                logger.warning("JWT Authentication failed: No Bearer token in header")
                 return None
                 
-            user_jwt = super().authenticate(request)
-            if user_jwt is not None:
-                logger.debug(f"JWT Authentication successful for user: {user_jwt[0].username}")
-            else:
-                logger.debug("JWT Authentication failed - no user returned")
-            return user_jwt
+            # Extract the token
+            token = auth_header.split(' ')[1] if len(auth_header.split(' ')) > 1 else ''
+            logger.debug(f"Extracted token: {token[:10]}...")
+            
+            # Try to authenticate with the token
+            try:
+                user_jwt = super().authenticate(request)
+                if user_jwt is not None:
+                    logger.info(f"JWT Authentication SUCCESS for user: {user_jwt[0].username}")
+                else:
+                    logger.warning("JWT Authentication failed: No user returned")
+                return user_jwt
+            except Exception as auth_error:
+                logger.error(f"JWT Authentication ERROR: {str(auth_error)}", exc_info=True)
+                return None
+                
         except Exception as e:
-            logger.error(f"JWT Authentication error: {str(e)}", exc_info=True)
+            logger.critical(f"Unexpected error in JWT Authentication: {str(e)}", exc_info=True)
             return None
 
 class DebugTokenAuthentication(TokenAuthentication):
