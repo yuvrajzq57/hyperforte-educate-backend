@@ -47,6 +47,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',         # Enable CORS
     'rest_framework.authtoken',
+    'rest_framework_simplejwt',  # JWT Authentication
+    'rest_framework_simplejwt.token_blacklist',  # For token blacklisting
     'chatbot',
     'authent',
     'profiledetails',
@@ -170,15 +172,34 @@ DATABASES = {
 }
 
 # JWT Settings
-JWT_SECRET_KEY = 'your-very-secure-secret-key'  
+import datetime
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': datetime.timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': datetime.timedelta(days=1),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,  # Using Django's SECRET_KEY for consistency
+    'VERIFYING_KEY': None,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+}
+
+# QR Code Settings
+QR_CODE_EXPIRY_MINUTES = 5  # 5 minutes expiry for QR codes
+JWT_SECRET_KEY = SECRET_KEY  # Reuse Django's SECRET_KEY for JWT signing
 JWT_ALGORITHM = 'HS256'
-QR_CODE_EXPIRY_MINUTES = 5  
 
 # SPOC Dashboard Settings
 EDUCATE_PORTAL_URL = 'https://educate-portal.example.com'  
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.TokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
