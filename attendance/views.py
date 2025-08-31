@@ -34,14 +34,27 @@ class DebugJWTAuthentication(JWTAuthentication):
             
             # Try to authenticate with the token
             try:
+                logger.debug("Attempting to validate JWT token...")
                 user_jwt = super().authenticate(request)
                 if user_jwt is not None:
-                    logger.info(f"JWT Authentication SUCCESS for user: {user_jwt[0].username}")
+                    user, token = user_jwt
+                    logger.info(f"JWT Authentication SUCCESS for user: {user.username}")
+                    logger.debug(f"Token type: {type(token).__name__}")
+                    logger.debug(f"Token payload: {token.payload}")
+                    return user_jwt
                 else:
                     logger.warning("JWT Authentication failed: No user returned")
-                return user_jwt
+                    return None
             except Exception as auth_error:
-                logger.error(f"JWT Authentication ERROR: {str(auth_error)}", exc_info=True)
+                import traceback
+                error_trace = traceback.format_exc()
+                logger.error(f"JWT Authentication ERROR: {str(auth_error)}\n{error_trace}")
+                
+                # Log additional debug info
+                from rest_framework_simplejwt.settings import api_settings as jwt_settings
+                logger.debug(f"JWT Settings - SECRET_KEY: {jwt_settings.SIGNING_KEY}")
+                logger.debug(f"JWT Settings - ALGORITHM: {jwt_settings.ALGORITHM}")
+                
                 return None
                 
         except Exception as e:
@@ -287,15 +300,15 @@ class QRCodeScanView(APIView):
 
 
 class MarkAttendanceView(APIView):
-    """
-    Mark attendance after QR code validation
+    """Mark attendance after QR code validation
     This is called after the QR code is validated by QRCodeScanView
     """
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [DebugJWTAuthentication, TokenAuthentication]  # Try JWT first, then fallback to Token
     permission_classes = [IsAuthenticated]
     throttle_classes = [AttendanceRateThrottle]
 
     def post(self, request, *args, **kwargs):
+        logger.debug(f"Request data: {request.data}")
         serializer = MarkAttendanceSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
