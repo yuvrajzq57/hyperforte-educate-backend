@@ -32,8 +32,25 @@ class SignupSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("A user with this external ID already exists.")
         return value
         
+    def generate_student_external_id(self, name):
+        """Generate a unique student external ID based on name and a number."""
+        # Clean the name and create base ID
+        base_id = name.lower().replace(' ', '_')
+        external_id = f"{base_id}_1"  # Start with _1
+        
+        # Check if this ID exists and increment the number if it does
+        counter = 1
+        while User.objects.filter(student_external_id=external_id).exists():
+            counter += 1
+            external_id = f"{base_id}_{counter}"
+            
+        return external_id
+        
     def create(self, validated_data):
-        student_external_id = validated_data.pop('student_external_id', None)
+        # Remove student_external_id from validated_data since we'll handle it ourselves
+        validated_data.pop('student_external_id', None)
+        
+        # Create the user first without the student_external_id
         user = User.objects.create_user(
             email=validated_data['email'],
             username=validated_data['username'],
@@ -41,12 +58,12 @@ class SignupSerializer(serializers.ModelSerializer):
             password=validated_data['password']
         )
         
-        if student_external_id:
-            user.student_external_id = student_external_id
-            user.save(update_fields=['student_external_id'])
+        # Generate and assign a unique student_external_id
+        user.student_external_id = self.generate_student_external_id(validated_data['name'])
+        user.save(update_fields=['student_external_id'])
             
         # Log the user creation with external ID for SPOC integration
-        logger.info(f"New user created with email: {user.email}, external_id: {student_external_id}")
+        logger.info(f"New user created with email: {user.email}, auto-generated external_id: {user.student_external_id}")
         
         return user
 
