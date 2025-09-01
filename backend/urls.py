@@ -16,6 +16,11 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+    TokenVerifyView
+)
 from chatbot.views import ChatBotAPIView, ChatHistoryAPIView
 
 urlpatterns = [
@@ -28,4 +33,9 @@ urlpatterns = [
     path('api/progress/', include('progress.urls')),
     path('api/studyplan/', include('studyplan.urls')),
     path('', include('attendance.urls')),  # Include attendance URLs
+    
+    # JWT Authentication endpoints
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
 ]
