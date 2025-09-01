@@ -308,9 +308,36 @@ class MarkAttendanceView(APIView):
     throttle_classes = [AttendanceRateThrottle]
 
     def post(self, request, *args, **kwargs):
-        logger.debug(f"Request data: {request.data}")
+        # Log incoming request data and headers
+        logger.info("=== Incoming Attendance Request ===")
+        logger.info(f"Request Headers: {dict(request.headers)}")
+        logger.info(f"Request Data: {request.data}")
+        logger.info(f"User: {request.user} (Authenticated: {request.user.is_authenticated})")
+        
+        # Log authentication information
+        auth_header = request.META.get('HTTP_AUTHORIZATION', 'No Auth Header')
+        logger.info(f"Authorization Header: {auth_header}")
+        
         serializer = MarkAttendanceSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        
+        # Log validated data from QR code
+        logger.info("=== QR Code Data ===")
+        for key, value in serializer.validated_data.items():
+            logger.info(f"{key}: {value}")
+            
+        # If token is in the data, log its contents (without the actual token for security)
+        if 'token' in serializer.validated_data:
+            token = serializer.validated_data['token']
+            try:
+                # Decode without verification just to log the contents
+                import jwt
+                decoded = jwt.decode(token, options={"verify_signature": False})
+                logger.info("Decoded JWT Token Contents:")
+                for key, value in decoded.items():
+                    logger.info(f"  {key}: {value}")
+            except Exception as e:
+                logger.warning(f"Could not decode JWT token: {str(e)}")
         
         session_id = serializer.validated_data['session_id']
         token = serializer.validated_data['token']
