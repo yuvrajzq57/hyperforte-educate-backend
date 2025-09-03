@@ -46,18 +46,12 @@ def verify_token(session_id, token):
         SPOCClientError: If verification fails or response is invalid
     """
     base_url = get_required_setting('SPOC_BASE_URL')
-    api_key = get_required_setting('SPOC_API_KEY')
     timeout = getattr(settings, 'SPOC_VERIFY_TIMEOUT_SECONDS', 5)
     
-    url = urljoin(base_url, '/api/spoc/attendance/verify')
+    # Get QR code for the session
+    url = urljoin(base_url, f'/api/attendance/sessions/{session_id}/qr.png')
     headers = {
-        'Authorization': f'Bearer {api_key}',
         'Content-Type': 'application/json',
-    }
-    
-    data = {
-        'session_id': str(session_id),
-        'token': token,
     }
     
     try:
@@ -83,13 +77,13 @@ def verify_token(session_id, token):
         logger.error(f'SPOC verification request failed: {str(e)}')
         raise SPOCClientError('Failed to verify session with SPOC service')
 
-def push_mark(session_id, student_external_id):
+def push_mark(session_id, student_id):
     """
     Notify SPOC service about a student's attendance.
     
     Args:
         session_id: UUID of the session
-        student_external_id: External ID of the student
+        student_id: ID of the student
         
     Returns:
         bool: True if successful, False otherwise
@@ -101,16 +95,16 @@ def push_mark(session_id, student_external_id):
     api_key = get_required_setting('SPOC_API_KEY')
     timeout = getattr(settings, 'SPOC_MARK_TIMEOUT_SECONDS', 3)
     
-    url = urljoin(base_url, '/api/spoc/attendance/mark')
+    url = urljoin(base_url, '/api/attendance/mark-attendance/')
     headers = {
-        'Authorization': f'Bearer {api_key}',
+        'X-API-Key': api_key,
         'Content-Type': 'application/json',
     }
     
     data = {
         'session_id': str(session_id),
-        'student_external_id': str(student_external_id),
-        'status': 'present',
+        'student_id': str(student_id),
+        'timestamp': timezone.now().isoformat(),
     }
     
     try:

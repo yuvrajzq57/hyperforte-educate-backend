@@ -238,7 +238,7 @@ class ChatBotAPIView(APIView):
                 }
                 
                 payload = {
-                    "model": "llama3-70b-8192",  # Using Llama 3 70B model - adjust as needed
+                    "model": "llama-3.3-70b-versatile",  # Using Llama 3 70B model - adjust as needed
                     "messages": messages,
                     "temperature": 0.1,
                     "max_tokens": 500
