@@ -49,9 +49,10 @@ def verify_token(session_id, token):
     timeout = getattr(settings, 'SPOC_VERIFY_TIMEOUT_SECONDS', 5)
     
     # Get QR code for the session
-    url = urljoin(base_url, f'/api/attendance/sessions/{session_id}/qr.png')
+    url = urljoin(base_url, f'/api/attendance/verify/')  # Updated endpoint
     headers = {
         'Content-Type': 'application/json',
+        'Authorization': f'Bearer {token}'  # Add Authorization header
     }
     
     try:
@@ -59,23 +60,26 @@ def verify_token(session_id, token):
         response = session.post(
             url,
             headers=headers,
-            json=data,
+            json={
+                'session_id': str(session_id),
+                'token': token
+            },
             timeout=timeout
         )
         
-        # Handle non-200 responses
         response.raise_for_status()
+        return response.json()
         
-        # Parse and validate response
-        result = response.json()
-        if not isinstance(result, dict):
-            raise SPOCClientError('Invalid response format from SPOC service')
-            
-        return result
-        
-    except requests.RequestException as e:
-        logger.error(f'SPOC verification request failed: {str(e)}')
-        raise SPOCClientError('Failed to verify session with SPOC service')
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Failed to verify token: {str(e)}"
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_data = e.response.json()
+                error_msg = error_data.get('detail', error_msg)
+            except:
+                error_msg = e.response.text or error_msg
+        logger.error(error_msg)
+        raise SPOCClientError(error_msg)
 
 def push_mark(session_id, student_id):
     """
