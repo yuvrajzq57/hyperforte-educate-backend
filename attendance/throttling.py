@@ -13,6 +13,28 @@ class AttendanceRateThrottle(UserRateThrottle):
         super().__init__()
         self.rate = getattr(settings, 'ATTENDANCE_RATE_LIMIT', '5/minute')
     
+    def get_cache_key(self, request, view):
+        """
+        Throttle based on user AND session_id to allow one attempt per session_id
+        without being blocked by previous scans for other sessions.
+        This reduces accidental throttling from QR scanner multiple callbacks.
+        """
+        # Identify the user or fallback to IP address
+        ident = self.get_ident(request)
+        user_part = str(getattr(request.user, 'id', 'anon')) if getattr(request, 'user', None) and request.user.is_authenticated else ident
+        
+        # Try to include session_id from request data
+        try:
+            session_id = str(request.data.get('session_id', ''))
+        except Exception:
+            session_id = ''
+        
+        key_ident = f"{user_part}:{session_id}" if session_id else user_part
+        return self.cache_format % {
+            'scope': self.scope,
+            'ident': key_ident
+        }
+    
     def parse_rate(self, rate):
         """
         Override to handle the rate string format.
