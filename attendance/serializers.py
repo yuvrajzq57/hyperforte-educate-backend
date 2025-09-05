@@ -65,6 +65,10 @@ class MarkAttendanceSerializer(serializers.Serializer):
             x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
             attrs['ip_address'] = x_forwarded_for.split(',')[0] if x_forwarded_for else request.META.get('REMOTE_ADDR')
         
+        # Coerce blank ip_address to None to satisfy IPAddressField(allow_null=True)
+        if attrs.get('ip_address') in ['', ' ', None]:
+            attrs['ip_address'] = None
+        
         return attrs
 
 
