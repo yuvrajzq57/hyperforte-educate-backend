@@ -299,9 +299,10 @@ class QRCodeScanView(APIView):
             raise ValidationError('Invalid or expired QR code')
 
 
-class MarkAttendanceView(APIView):
+class MarkAttendanceAfterScanView(APIView):
     """Mark attendance after QR code validation
     This is called after the QR code is validated by QRCodeScanView
+    NOTE: Renamed to avoid overriding the primary MarkAttendanceView above.
     """
     authentication_classes = [DebugJWTAuthentication, TokenAuthentication]  # Try JWT first, then fallback to Token
     permission_classes = [IsAuthenticated]
