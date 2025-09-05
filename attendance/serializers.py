@@ -3,6 +3,7 @@ import uuid
 import json
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from .models import AttendanceRecord
 
 class MarkAttendanceSerializer(serializers.Serializer):
     """
@@ -70,6 +71,26 @@ class MarkAttendanceSerializer(serializers.Serializer):
             attrs['ip_address'] = None
         
         return attrs
+
+    def create(self, validated_data):
+        """Create an AttendanceRecord from validated data."""
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+
+        if not user or not user.is_authenticated:
+            raise ValidationError('User must be authenticated to mark attendance')
+
+        attendance = AttendanceRecord.objects.create(
+            external_session_id=validated_data['session_id'],
+            student=user,
+            student_external_id=validated_data.get('student_external_id') or getattr(user, 'student_external_id', None),
+            status=validated_data.get('status', 'present'),
+            method=validated_data.get('method', 'QR'),
+            source=validated_data.get('source', 'EDUCATE'),
+            user_agent=validated_data.get('user_agent', '') or '',
+            ip_address=validated_data.get('ip_address') or None,
+        )
+        return attendance
 
 
 class MarkAttendanceOutSerializer(serializers.Serializer):
