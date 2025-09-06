@@ -3,7 +3,8 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     QRCodeScanView,
     MarkAttendanceView,
-    HealthCheckView
+    HealthCheckView,
+    MyAttendanceListView
 )
 
 app_name = 'attendance'
@@ -18,6 +19,9 @@ urlpatterns = [
     
     # Mark attendance after validation (for Educate Portal)
     path('api/v1/attendance/mark-attendance/', MarkAttendanceView.as_view(), name='mark-attendance'),
+    
+    # Fetch authenticated user's attendance records
+    path('api/v1/attendance/my/', MyAttendanceListView.as_view(), name='my-attendance'),
     
     # Health check endpoint
     path('api/v1/attendance/health/', HealthCheckView.as_view(), name='health-check'),

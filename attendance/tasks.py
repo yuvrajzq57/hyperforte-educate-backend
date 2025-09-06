@@ -5,6 +5,7 @@ from celery import shared_task
 from django.conf import settings
 from django.core.cache import cache
 from requests.exceptions import RequestException
+from .models import AttendanceRecord
 
 logger = logging.getLogger(__name__)
 
@@ -19,15 +20,14 @@ def push_mark_to_spoc(self, session_id, student_external_id, token, method='QR')
         token (str): Authentication token for the SPOC server
         method (str): Method of attendance marking (default: 'QR')
     """
-    # Get SPOC server URL from settings
-    spoc_url = getattr(settings, 'SPOC_SERVER_URL', 'http://your-spoc-server')
-    endpoint = f"{spoc_url.rstrip('/')}/api/attendance/mark-attendance/"
+    # Get SPOC base URL from settings (prefer SPOC_BASE_URL per contract)
+    spoc_base = getattr(settings, 'SPOC_BASE_URL', None) or getattr(settings, 'SPOC_SERVER_URL', '')
+    endpoint = f"{spoc_base.rstrip('/')}/api/attendance/mark"
     
     # Prepare the payload
     payload = {
         "session_id": str(session_id),
         "student_external_id": student_external_id,
-        "token": token,
         "status": "present",
         "method": method,
         "source": "EDUCATE"
@@ -36,7 +36,8 @@ def push_mark_to_spoc(self, session_id, student_external_id, token, method='QR')
     # Add headers
     headers = {
         'Content-Type': 'application/json',
-        'Authorization': f'Token {token}'
+        # Per SPOC contract: pass QR JWT in Authorization header as Bearer
+        'Authorization': f'Bearer {token}'
     }
     
     # Create a unique key for this attendance record to prevent duplicates
@@ -58,18 +59,56 @@ def push_mark_to_spoc(self, session_id, student_external_id, token, method='QR')
             timeout=10  # 10 seconds timeout
         )
         
+        # Attempt to parse response JSON for logging
+        resp_json = None
+        try:
+            resp_json = response.json()
+        except Exception:
+            resp_json = None
+
         # Check for successful response
-        response.raise_for_status()
+        if response.status_code >= 400:
+            # Log error details from SPOC
+            logger.error(
+                "SPOC mark failed: %s %s | body=%s",
+                response.status_code,
+                response.text[:500],
+                json.dumps(resp_json) if resp_json is not None else 'N/A'
+            )
+            response.raise_for_status()
         
         # Mark as processed in cache (expires in 24 hours)
         cache.set(cache_key, True, timeout=60 * 60 * 24)
         
         logger.info(f"Successfully forwarded attendance to SPOC server: {response.text}")
-        return {"status": "success", "data": response.json()}
+
+        # Mark the corresponding attendance record as synced if we can locate it
+        try:
+            rec = AttendanceRecord.objects.filter(
+                external_session_id=session_id,
+                student_external_id=student_external_id
+            ).order_by('-marked_at').first()
+            if rec:
+                rec.mark_synced(True)
+        except Exception as e:
+            logger.warning(f"Could not mark AttendanceRecord as synced: {e}")
+
+        return {"status": "success", "data": resp_json or {}}
         
     except RequestException as e:
         error_msg = f"Failed to forward attendance to SPOC server: {str(e)}"
         logger.error(error_msg)
+
+        # Try to mark record as not synced with error
+        try:
+            rec = AttendanceRecord.objects.filter(
+                external_session_id=session_id,
+                student_external_id=student_external_id
+            ).order_by('-marked_at').first()
+            if rec:
+                rec.mark_synced(False, error_msg)
+        except Exception as mark_err:
+            logger.warning(f"Could not update AttendanceRecord sync status: {mark_err}")
         
         # Retry on failure (Celery will handle the retry logic)
         if self.request.retries < self.max_retries:

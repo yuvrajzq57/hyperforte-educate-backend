@@ -174,3 +174,21 @@ class HealthCheckSerializer(serializers.Serializer):
             'timestamp': timezone.now().isoformat(),
             'service': 'attendance'
         }
+
+
+class AttendanceRecordListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for listing user's attendance records."""
+    id = serializers.CharField(source='pk', read_only=True)
+
+    class Meta:
+        model = AttendanceRecord
+        fields = [
+            'id',
+            'external_session_id',
+            'status',
+            'method',
+            'source',
+            'marked_at',
+            'synced_with_spoc',
+            'sync_error',
+        ]

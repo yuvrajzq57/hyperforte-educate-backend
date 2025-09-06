@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timedelta
 from django.conf import settings
 from django.utils import timezone
-from rest_framework import status
+from rest_framework import status, generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -77,7 +77,8 @@ class DebugTokenAuthentication(TokenAuthentication):
 from .serializers import (
     MarkAttendanceSerializer,
     QRCodeScanSerializer,
-    HealthCheckSerializer
+    HealthCheckSerializer,
+    AttendanceRecordListSerializer
 )
 from .throttling import AttendanceRateThrottle
 from .jwt_utils import JWTService
@@ -207,12 +208,16 @@ class MarkAttendanceView(APIView):
             )
             
             # Forward to SPOC server asynchronously
-            push_mark_to_spoc.delay(
-                session_id=str(attendance.external_session_id),
-                student_external_id=attendance.student_external_id,
-                token=attendance.token,
-                method=attendance.method
-            )
+            try:
+                qr_token = serializer.validated_data.get('token')
+                push_mark_to_spoc.delay(
+                    session_id=str(attendance.external_session_id),
+                    student_external_id=attendance.student_external_id,
+                    token=qr_token,
+                    method=attendance.method
+                )
+            except Exception as forward_err:
+                logger.warning(f"Failed to enqueue SPOC forward task: {forward_err}")
             
             return Response(
                 {
@@ -418,3 +423,50 @@ class HealthCheckView(APIView):
             'timestamp': timezone.now().isoformat(),
             'service': 'attendance'
         })
+
+
+class MyAttendanceListView(generics.ListAPIView):
+    """List the authenticated user's attendance records.
+    Supports optional filters:
+      - from: ISO date or datetime (inclusive)
+      - to: ISO date or datetime (inclusive)
+      - status: present|absent|late|excused
+    """
+    serializer_class = AttendanceRecordListSerializer
+    authentication_classes = [DebugJWTAuthentication, DebugTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = AttendanceRecord.objects.filter(student=user)
+
+        # Filters
+        from_param = self.request.query_params.get('from')
+        to_param = self.request.query_params.get('to')
+        status_param = self.request.query_params.get('status')
+
+        def parse_dt(value):
+            try:
+                # Try parsing full ISO datetime first
+                return datetime.fromisoformat(value.replace('Z', '+00:00'))
+            except Exception:
+                try:
+                    # Fallback: parse date only
+                    return datetime.fromisoformat(value + 'T00:00:00')
+                except Exception:
+                    return None
+
+        if from_param:
+            dt_from = parse_dt(from_param)
+            if dt_from:
+                qs = qs.filter(marked_at__gte=dt_from)
+
+        if to_param:
+            dt_to = parse_dt(to_param)
+            if dt_to:
+                qs = qs.filter(marked_at__lte=dt_to)
+
+        if status_param in {'present', 'absent', 'late', 'excused'}:
+            qs = qs.filter(status=status_param)
+
+        return qs.order_by('-marked_at')
