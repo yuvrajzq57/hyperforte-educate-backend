@@ -1,29 +1,53 @@
 import os
 import json
+import requests
+from datetime import datetime ,timedelta
+import time
+from urllib.parse import urlencode
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
-from profiledetails.models import ProfileDetails
-from rest_framework.pagination import PageNumberPagination
-import requests
-from datetime import datetime
-from dotenv import load_dotenv
-import os
-from datetime import datetime
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.authentication import BasicAuthentication,SessionAuthentication, TokenAuthentication
-from django.utils.decorators import method_decorator
+from django.shortcuts import redirect
+from django.urls import reverse
+from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.authentication import (
+    BasicAuthentication, 
+    SessionAuthentication, 
+    TokenAuthentication
+)
 from rest_framework.authtoken.models import Token
-from django.test import RequestFactory
+from rest_framework.pagination import PageNumberPagination
+from dotenv import load_dotenv
+from profiledetails.models import ProfileDetails
+from .models import GitHubUser
+from django.db import IntegrityError
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+import asyncio
+from mcp_integration.client import mcp_client
+from mcp_integration.github_utils import extract_github_intent, format_github_response, get_github_token
+import logging
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()  # Load environment variables from .env
 
-# Configure Groq API - in production, use environment variables
+# Configure Groq API
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
-# GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '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')
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+# GitHub OAuth Configuration
+GITHUB_CLIENT_ID = os.getenv('GITHUB_CLIENT_ID')
+GITHUB_CLIENT_SECRET = os.getenv('GITHUB_CLIENT_SECRET')
+GITHUB_REDIRECT_URI = os.getenv('GITHUB_REDIRECT_URI', 'http://localhost:8000/api/chatbot/github/callback/')
+GITHUB_AUTH_URL = 'https://github.com/login/oauth/authorize'
+GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token'
+GITHUB_USER_API = 'https://api.github.com/user'
 
 # Mocked database of chat messages and contexts
 CHAT_MESSAGES = []
@@ -81,6 +105,28 @@ class ChatBotAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
+            # Check if this is a GitHub-related query
+            try:
+                github_result = extract_github_intent(message.lower())
+                if github_result is not None:
+                    github_intent, github_params = github_result
+                    # Handle GitHub-related query using MCP
+                    github_response = self.handle_github_query(request.user, github_intent, github_params)
+                    if github_response:
+                        chat_message = {
+                            'id': len(CHAT_MESSAGES) + 1,
+                            'user_id': user_id,
+                            'module_id': module_id,
+                            'message': message,
+                            'response': github_response,
+                            'timestamp': datetime.now().isoformat()
+                        }
+                        CHAT_MESSAGES.append(chat_message)
+                        return Response(chat_message, status=status.HTTP_201_CREATED)
+            except Exception as github_error:
+                logger.error(f"Error in GitHub intent detection: {str(github_error)}")
+                # Continue with normal chatbot flow if GitHub detection fails
+            
             # Generate AI response with user details
             ai_response = self.generate_ai_response(message, module_id, user_id, user_name)
             
@@ -98,10 +144,76 @@ class ChatBotAPIView(APIView):
             return Response(chat_message, status=status.HTTP_201_CREATED)
             
         except Exception as e:
+            logger.error(f"Unexpected error in chatbot: {str(e)}", exc_info=True)
             return Response(
-                {"error": str(e)}, 
+                {"error": "An unexpected error occurred. Please try again later."}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+    
+    def handle_github_query(self, user, intent, params):
+        """Handle GitHub-related queries using the MCP server"""
+        try:
+            # Get GitHub token from the user's GitHubUser model
+            token = get_github_token(user)
+            if not token:
+                return "Please connect your GitHub account first. You can do this by clicking the 'Connect GitHub' button."
+            
+            # Use asyncio.run to handle the async call properly
+            try:
+                if intent == 'list_repos':
+                    repos = asyncio.run(
+                        mcp_client.list_repos(access_token=token, per_page=10)
+                    )
+                    return format_github_response(intent, repos)
+                    
+                elif intent == 'list_issues':
+                    if 'owner' not in params or 'repo' not in params:
+                        return "Please specify both owner and repository, like 'show issues in owner/repo'."
+                    
+                    issues = asyncio.run(
+                        mcp_client.list_issues(
+                            access_token=token,
+                            owner=params['owner'],
+                            repo=params['repo']
+                        )
+                    )
+                    return format_github_response(intent, issues)
+                    
+                elif intent == 'list_commits':
+                    if 'owner' not in params or 'repo' not in params:
+                        return "Please specify both owner and repository, like 'show commits in owner/repo'."
+                    
+                    commits = asyncio.run(
+                        mcp_client.list_commits(
+                            access_token=token,
+                            owner=params['owner'],
+                            repo=params['repo']
+                        )
+                    )
+                    return format_github_response(intent, commits)
+                    
+                else:
+                    return "I'm not sure how to handle that GitHub request."
+                    
+            except Exception as mcp_error:
+                logger.error(f"MCP server error: {str(mcp_error)}")
+                if "Event loop is closed" in str(mcp_error):
+                    # Try once more with a fresh event loop
+                    try:
+                        if intent == 'list_repos':
+                            repos = asyncio.run(
+                                mcp_client.list_repos(access_token=token, per_page=10)
+                            )
+                            return format_github_response(intent, repos)
+                    except Exception as retry_error:
+                        logger.error(f"Retry failed: {str(retry_error)}")
+                        return "Sorry, I encountered an error while processing your GitHub request. Please try again later."
+                return "Sorry, I encountered an error while processing your GitHub request. Please try again later."
+                
+        except Exception as e:
+            logger.error(f"Error handling GitHub query: {str(e)}")
+            return "Sorry, I encountered an error while processing your GitHub request. Please try again later."
+    
     def get_cybersecurity_context(self, module_id):
 
         """Returns module-specific cybersecurity context based on module_id"""
@@ -264,6 +376,227 @@ class ChatBotAPIView(APIView):
    
 
 @method_decorator(csrf_exempt, name='dispatch')
+class GitHubOAuthView(APIView):
+    """Initiates the GitHub OAuth flow"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        params = {
+            'client_id': GITHUB_CLIENT_ID,
+            'redirect_uri': GITHUB_REDIRECT_URI,
+            'scope': 'repo,user',  # Requesting repo access for GitHub MCP
+            'state': request.user.id,  # Store user ID in state for security
+        }
+        auth_url = f"{GITHUB_AUTH_URL}?{urlencode(params)}"
+        return Response({'auth_url': auth_url}, status=status.HTTP_200_OK)
+
+
+class GitHubOAuthCallbackView(APIView):
+    """Handles the GitHub OAuth callback"""
+    permission_classes = [AllowAny]  # Must be accessible without auth
+    
+    def get(self, request):
+        code = request.query_params.get('code')
+        state = request.query_params.get('state')
+        
+        if not code or not state:
+            return Response(
+                {'error': 'Missing required parameters'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Exchange code for access token
+            token_data = {
+                'client_id': GITHUB_CLIENT_ID,
+                'client_secret': GITHUB_CLIENT_SECRET,
+                'code': code,
+                'redirect_uri': GITHUB_REDIRECT_URI,
+            }
+            
+            headers = {'Accept': 'application/json'}
+            response = requests.post(
+                GITHUB_TOKEN_URL, 
+                data=token_data, 
+                headers=headers
+            )
+            token_json = response.json()
+            
+            if 'error' in token_json:
+                return Response(
+                    {'error': token_json['error_description']}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            access_token = token_json.get('access_token')
+            
+            # Get GitHub user info
+            user_response = requests.get(
+                GITHUB_USER_API,
+                headers={
+                    'Authorization': f'token {access_token}',
+                    'Accept': 'application/json'
+                }
+            )
+            github_user = user_response.json()
+            
+            # Store or update GitHub user info
+            user = request.user if request.user.is_authenticated else None
+            if not user and state.isdigit():
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                try:
+                    user = User.objects.get(id=int(state))
+                except (User.DoesNotExist, ValueError):
+                    pass
+            
+            if not user:
+                return Response(
+                    {'error': 'User not found'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Calculate token expiration (GitHub tokens don't expire by default, but we'll set a default)
+            expires_in = token_json.get('expires_in', 60 * 60 * 24 * 30)  # Default 30 days if not provided
+            token_expires = timezone.now() + timezone.timedelta(seconds=expires_in)
+            
+            # Create or update GitHub user record
+            github_user_obj, created = GitHubUser.objects.update_or_create(
+                user=user,
+                defaults={
+                    'github_username': github_user.get('login'),
+                    'access_token': access_token,
+                    'refresh_token': token_json.get('refresh_token'),
+                    'token_expires': token_expires,
+                }
+            )
+            
+            # Redirect back to the frontend with success status
+            frontend_redirect = f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/chat?github_connected=true"
+            return redirect(frontend_redirect)
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class GitHubStatusView(APIView):
+    """Checks if the current user has connected their GitHub account"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            github_user = GitHubUser.objects.get(user=request.user)
+            return Response({
+                'connected': True,
+                'username': github_user.github_username,
+                'expires': github_user.token_expires
+            })
+        except GitHubUser.DoesNotExist:
+            return Response({'connected': False})
+
+
+class GitHubRepositoriesView(APIView):
+    """Lists the authenticated user's GitHub repositories using MCP server"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            # Get the GitHub user's access token
+            github_user = GitHubUser.objects.get(user=request.user)
+            if not github_user.access_token:
+                return Response(
+                    {"error": "GitHub account not connected"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Use asyncio.run to handle the async call properly
+            try:
+                repos = asyncio.run(
+                    mcp_client.list_repos(
+                        access_token=github_user.access_token,
+                        per_page=100  # Get up to 100 repositories
+                    )
+                )
+                
+                # Format the response
+                formatted_repos = [{
+                    'name': repo.get('name'),
+                    'full_name': repo.get('full_name'),
+                    'private': repo.get('private', False),
+                    'html_url': repo.get('html_url'),
+                    'description': repo.get('description'),
+                    'language': repo.get('language'),
+                    'updated_at': repo.get('updated_at'),
+                    'size': repo.get('size', 0)
+                } for repo in repos]
+                
+                return Response({"repositories": formatted_repos}, status=status.HTTP_200_OK)
+                
+            except Exception as mcp_error:
+                logger.error(f"MCP server error: {str(mcp_error)}")
+                if "Event loop is closed" in str(mcp_error):
+                    # Try once more with a fresh event loop
+                    try:
+                        repos = asyncio.run(
+                            mcp_client.list_repos(
+                                access_token=github_user.access_token,
+                                per_page=100
+                            )
+                        )
+                        formatted_repos = [{
+                            'name': repo.get('name'),
+                            'full_name': repo.get('full_name'),
+                            'private': repo.get('private', False),
+                            'html_url': repo.get('html_url'),
+                            'description': repo.get('description'),
+                            'language': repo.get('language'),
+                            'updated_at': repo.get('updated_at'),
+                            'size': repo.get('size', 0)
+                        } for repo in repos]
+                        return Response({"repositories": formatted_repos}, status=status.HTTP_200_OK)
+                    except Exception as retry_error:
+                        logger.error(f"Retry failed: {str(retry_error)}")
+                        return Response(
+                            {"error": "Failed to fetch repositories"}, 
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                        )
+                return Response(
+                    {"error": "Failed to fetch repositories"}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+        except GitHubUser.DoesNotExist:
+            return Response(
+                {"error": "GitHub account not connected"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error fetching GitHub repositories: {str(e)}")
+            return Response(
+                {"error": "Failed to fetch repositories"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class GitHubDisconnectView(APIView):
+    """Disconnects the user's GitHub account"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            github_user = GitHubUser.objects.get(user=request.user)
+            github_user.delete()
+            return Response({'success': True})
+        except GitHubUser.DoesNotExist:
+            return Response(
+                {'error': 'No GitHub account connected'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
 class ChatHistoryAPIView(APIView):
     authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]

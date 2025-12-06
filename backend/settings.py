@@ -49,14 +49,16 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'rest_framework_simplejwt',  # JWT Authentication
     'rest_framework_simplejwt.token_blacklist',  # For token blacklisting
-    'chatbot',
+    'chatbot',  # Your chatbot app
     'authent',
     'profiledetails',
     'progress',
     'courses',
     'studyplan',
     'attendance',
+    'mcp_integration'
 ]
+MCP_SERVER_URL = 'http://localhost:3333'
 
 AUTH_USER_MODEL = 'authent.User'
 
@@ -85,6 +87,7 @@ else:
     CORS_ALLOWED_ORIGINS = [
         'http://localhost:3000',
         'http://127.0.0.1:3000',
+        'http://127.0.0.1:3001',
         'http://localhost:8000',
         'http://127.0.0.1:8000',
         'https://hyperforte-educate-frontend.vercel.app',
@@ -128,11 +131,14 @@ CORS_ALLOW_METHODS = [
 ]
 
 # For development - allow all origins
-CORS_ORIGIN_WHITELIST = [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'https://hyperforte-educate-frontend.vercel.app',
-]
+CORS_ALLOW_ALL_ORIGINS = True  # Only for development, restrict in production
+
+# Session settings
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read CSRF token
 
 TEMPLATES = [
     {

@@ -27,6 +27,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/chatbot/', ChatBotAPIView.as_view(), name='chatbot'),
     path('api/chatbot/history/', ChatHistoryAPIView.as_view(), name='chatbot-history'),
+    path('api/chatbot/', include('chatbot.urls')),
     path('api/authent/', include('authent.urls')),
     path('api/', include('profiledetails.urls')),
     path('api/courses/', include('courses.urls')),
