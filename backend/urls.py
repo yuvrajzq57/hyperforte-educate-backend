@@ -33,8 +33,8 @@ urlpatterns = [
     path('api/courses/', include('courses.urls')),
     path('api/progress/', include('progress.urls')),
     path('api/studyplan/', include('studyplan.urls')),
-    path('', include('attendance.urls')),  # Include attendance URLs
-    
+    path('api/job-matching/', include('job_matching.urls')),  
+    path('', include('attendance.urls')),  
     # JWT Authentication endpoints
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

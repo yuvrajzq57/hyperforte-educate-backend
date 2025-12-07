@@ -158,60 +158,92 @@ class ChatBotAPIView(APIView):
             if not token:
                 return "Please connect your GitHub account first. You can do this by clicking the 'Connect GitHub' button."
             
-            # Use asyncio.run to handle the async call properly
-            try:
-                if intent == 'list_repos':
-                    repos = asyncio.run(
-                        mcp_client.list_repos(access_token=token, per_page=10)
-                    )
-                    return format_github_response(intent, repos)
-                    
-                elif intent == 'list_issues':
-                    if 'owner' not in params or 'repo' not in params:
-                        return "Please specify both owner and repository, like 'show issues in owner/repo'."
-                    
-                    issues = asyncio.run(
-                        mcp_client.list_issues(
-                            access_token=token,
-                            owner=params['owner'],
-                            repo=params['repo']
-                        )
-                    )
-                    return format_github_response(intent, issues)
-                    
-                elif intent == 'list_commits':
-                    if 'owner' not in params or 'repo' not in params:
-                        return "Please specify both owner and repository, like 'show commits in owner/repo'."
-                    
-                    commits = asyncio.run(
-                        mcp_client.list_commits(
-                            access_token=token,
-                            owner=params['owner'],
-                            repo=params['repo']
-                        )
-                    )
-                    return format_github_response(intent, commits)
-                    
-                else:
-                    return "I'm not sure how to handle that GitHub request."
-                    
-            except Exception as mcp_error:
-                logger.error(f"MCP server error: {str(mcp_error)}")
-                if "Event loop is closed" in str(mcp_error):
-                    # Try once more with a fresh event loop
-                    try:
-                        if intent == 'list_repos':
-                            repos = asyncio.run(
-                                mcp_client.list_repos(access_token=token, per_page=10)
-                            )
-                            return format_github_response(intent, repos)
-                    except Exception as retry_error:
-                        logger.error(f"Retry failed: {str(retry_error)}")
-                        return "Sorry, I encountered an error while processing your GitHub request. Please try again later."
-                return "Sorry, I encountered an error while processing your GitHub request. Please try again later."
+            # Call the synchronous helper method
+            return self._run_async_github_call(intent, params, token)
                 
         except Exception as e:
             logger.error(f"Error handling GitHub query: {str(e)}")
+            return "Sorry, I encountered an error while processing your GitHub request. Please try again later."
+    
+    def _run_async_github_call(self, intent, params, token):
+        """Helper method to run MCP calls (now synchronous)"""
+        try:
+            if intent == 'list_repos':
+                repos = mcp_client.list_repos(access_token=token, per_page=10)
+                return format_github_response(intent, repos)
+                
+            elif intent == 'list_issues':
+                if 'owner' not in params or 'repo' not in params:
+                    return "Please specify both owner and repository, like 'show issues in owner/repo'."
+                
+                issues = mcp_client.list_issues(
+                    access_token=token,
+                    owner=params['owner'],
+                    repo=params['repo']
+                )
+                return format_github_response(intent, issues, repo=params['repo'])
+                
+            elif intent == 'list_commits':
+                if 'owner' not in params or 'repo' not in params:
+                    return "Please specify both owner and repository, like 'show commits in owner/repo'."
+                
+                commits = mcp_client.list_commits(
+                    access_token=token,
+                    owner=params['owner'],
+                    repo=params['repo']
+                )
+                return format_github_response(intent, commits, repo=params['repo'])
+            
+            elif intent == 'get_repo_info':
+                if 'owner' not in params or 'repo' not in params:
+                    return "Please specify both owner and repository, like 'get repo information of owner/repo'."
+                
+                repo_info = mcp_client.get_repo_info(
+                    access_token=token,
+                    owner=params['owner'],
+                    repo=params['repo']
+                )
+                return format_github_response(intent, repo_info)
+            
+            elif intent == 'list_pull_requests':
+                if 'owner' not in params or 'repo' not in params:
+                    return "Please specify both owner and repository, like 'list pull requests in owner/repo'."
+                
+                prs = mcp_client.list_pull_requests(
+                    access_token=token,
+                    owner=params['owner'],
+                    repo=params['repo']
+                )
+                return format_github_response(intent, prs, repo=params['repo'])
+            
+            elif intent == 'list_branches':
+                if 'owner' not in params or 'repo' not in params:
+                    return "Please specify both owner and repository, like 'list branches in owner/repo'."
+                
+                branches = mcp_client.list_branches(
+                    access_token=token,
+                    owner=params['owner'],
+                    repo=params['repo']
+                )
+                return format_github_response(intent, branches, repo=params['repo'])
+            
+            elif intent == 'get_file_content':
+                if 'owner' not in params or 'repo' not in params or 'path' not in params:
+                    return "Please specify owner, repository, and file path, like 'get file content of owner/repo/path/to/file'."
+                
+                file_content = mcp_client.get_file_content(
+                    access_token=token,
+                    owner=params['owner'],
+                    repo=params['repo'],
+                    path=params['path']
+                )
+                return format_github_response(intent, file_content)
+                
+            else:
+                return "I'm not sure how to handle that GitHub request."
+                
+        except Exception as e:
+            logger.error(f"Error in GitHub call: {str(e)}")
             return "Sorry, I encountered an error while processing your GitHub request. Please try again later."
     
     def get_cybersecurity_context(self, module_id):

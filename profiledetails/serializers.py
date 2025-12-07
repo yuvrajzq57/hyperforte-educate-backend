@@ -23,8 +23,24 @@ class ProfileDetailsSerializer(serializers.ModelSerializer):
         representation = super().to_representation(instance)
         # Add default values for frontend compatibility
         representation['description'] = representation.get('about', '')
-        representation['strengths'] = []
-        representation['weaknesses'] = []
-        representation['learningGoals'] = []
-        representation['skillLevels'] = []
+        
+        # Only set empty arrays if the fields are None or empty
+        if not representation.get('strengths'):
+            representation['strengths'] = []
+            
+        if not representation.get('weaknesses'):
+            representation['weaknesses'] = []
+            
+        if not representation.get('learning_goals'):
+            representation['learning_goals'] = []
+            
+        if not representation.get('skill_levels'):
+            representation['skill_levels'] = {}
+            
+        # Add the skill_levels as skillLevels for frontend compatibility
+        representation['skillLevels'] = representation.get('skill_levels', {})
+        
+        # Add learning_goals as learningGoals for frontend compatibility
+        representation['learningGoals'] = representation.get('learning_goals', [])
+        
         return representation

@@ -56,7 +56,8 @@ INSTALLED_APPS = [
     'courses',
     'studyplan',
     'attendance',
-    'mcp_integration'
+    'mcp_integration',
+    'job_matching'
 ]
 MCP_SERVER_URL = 'http://localhost:3333'
 
